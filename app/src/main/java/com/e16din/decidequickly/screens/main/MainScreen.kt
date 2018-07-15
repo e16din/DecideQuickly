@@ -1,15 +1,19 @@
 package com.e16din.decidequickly.screens.main
 
-import com.e16din.datamanager.get
-import com.e16din.datamanager.put
 import com.e16din.decidequickly.data.Criterion
 import com.e16din.decidequickly.data.Decision
 
 enum class CriteriaState { Empty, Success, Fail }
 
-class MainScreen(private val user: User,
-                 private val system: System,
-                 private val app: App) {
+typealias AfterDelayCallback = () -> Unit
+
+open class MainScreen(private val user: User,
+                      private val system: System,
+                      private val app: App) {
+
+    companion object {
+        const val DELAY_BEFORE_SHOW_RESULT = 1500L
+    }
 
     interface User {
         fun showMinimalCriteriaScreen(criteria: ArrayList<Criterion>)
@@ -26,80 +30,102 @@ class MainScreen(private val user: User,
 
         fun showProcessingProgress()
 
-        fun hideScreen()
+        fun clearScreen()
     }
 
     interface App {
-        val history: ArrayList<Decision>
+        fun addDecisionToHistory(decision: Decision)
     }
 
     interface System {
-        fun showAfterDelay(delayMs: Long, callback: () -> Unit)
+        fun doAfterDelay(delayMs: Long, callback: AfterDelayCallback)
+
+        fun saveDecision(decision: Decision)
     }
 
-    object DATA {
-        const val DECISION = "DECISION"
-    }
+    lateinit var decision: Decision
 
-    var decision = DATA.DECISION.get() ?: Decision()
-        set(value) {
-            field = value
-            DATA.DECISION.put(value)
-        }
+    fun onCreate(decision: Decision) {
+        this.decision = decision
 
-    fun onCreate() {
-        if (decision.playng) {
+        if (decision.playing) {
             user.hidePlayButton()
         }
-        handleMinimalCriteria()
-        handleOptimalCriteria()
+
+        if (decision.minimalCriteria.isNotEmpty()) {
+            handleMinimalCriteria()
+        } else if (decision.playing) {
+            user.showMinimalCriteriaButton(CriteriaState.Empty)
+        }
+
+        if (decision.optimalCriteria.isNotEmpty()) {
+            handleOptimalCriteria()
+        } else {
+            val minimalCriteriaPassed = getCriteriaState(decision.minimalCriteria) == CriteriaState.Success
+            if (decision.playing && minimalCriteriaPassed) {
+                user.showOptimalCriteriaButton(CriteriaState.Empty)
+            }
+        }
+    }
+
+    fun onMenuActionDoneClick() {
+        app.addDecisionToHistory(decision)
+        user.clearScreen()
     }
 
     fun onPlayClick() {
-        decision.playng = true
+        decision.playing = true
+        system.saveDecision(decision)
+
         user.showMinimalCriteriaButton(CriteriaState.Empty)
         user.hidePlayButton()
     }
 
     fun onMinimalCriteriaResult(criteria: ArrayList<Criterion>) {
         decision.minimalCriteria = criteria
+        system.saveDecision(decision)
+
         handleMinimalCriteria()
     }
 
     fun onOptimalCriteriaResult(criteria: ArrayList<Criterion>) {
         decision.optimalCriteria = criteria
+        system.saveDecision(decision)
+
         handleOptimalCriteria()
     }
 
     private fun handleMinimalCriteria() {
-        val minimalCriteriaPassed = decision.minimalCriteria.all { it.passed }
-        val state = getCriteriaState(minimalCriteriaPassed)
+        val state = getCriteriaState(decision.minimalCriteria)
         user.showMinimalCriteriaButton(state)
 
-        if (minimalCriteriaPassed) {
+        if (state == CriteriaState.Success) {
             user.showOptimalCriteriaButton(CriteriaState.Empty)
-        } else {
+        }
+
+        if (state == CriteriaState.Fail) {
             showResultScreen(false)
         }
     }
 
     private fun handleOptimalCriteria() {
-        val optimalCriteriaPassed = decision.optimalCriteria.all { it.passed }
-        val state = getCriteriaState(optimalCriteriaPassed)
+        val state = getCriteriaState(decision.optimalCriteria)
         user.showOptimalCriteriaButton(state)
-
-        showResultScreen(optimalCriteriaPassed)
+        showResultScreen(state == CriteriaState.Success)
     }
 
     private fun showResultScreen(criteriaPassed: Boolean) {
         user.showProcessingProgress()
-        system.showAfterDelay(1500) {
+        system.doAfterDelay(DELAY_BEFORE_SHOW_RESULT) {
             user.showResultScreen(criteriaPassed)
-            user.hideScreen()
         }
+
     }
 
-    private fun getCriteriaState(criteriaPassed: Boolean): CriteriaState {
+    private fun getCriteriaState(criteria: ArrayList<Criterion>): CriteriaState {
+        val criteriaPassed =
+                criteria.isNotEmpty() && criteria.all { it.passed }
+
         return if (criteriaPassed)
             CriteriaState.Success
         else
@@ -108,6 +134,7 @@ class MainScreen(private val user: User,
 
     fun onCauseChanged(cause: String) {
         decision.cause = cause
+        system.saveDecision(decision)
     }
 
     fun onMinimalCriteriaClick() {
