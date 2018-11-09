@@ -1,3 +1,12 @@
 <resources>
-    <string name="app_name">DecideQuickly</string>
+    <string name="app_name">TestMvp</string>
+    <string name="main_task_model_hint">Модель задачи</string>
+    <string name="main_task_model_label">В чем состоит задача?</string>
+    <string name="main_my_prize_label">Мой Приз:</string>
+    <string name="main_my_prize_value_label">100%</string>
+    <string name="screen_criteria_next_button">Дальше</string>
+    <string name="screen_result_decision_accept">Решение принято!</string>
+    <string name="screen_result_decision_reject">Решение отклонено!</string>
+    <string name="criteria_minimal_title">Минимальные критерии</string>
+    <string name="criteria_optimal_title">Оптимальные критерии</string>
 </resources>
